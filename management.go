@@ -174,6 +174,14 @@ main{max-width:1180px;margin:0 auto;padding:28px 22px 44px}h1{margin:0 0 6px;fon
 .warn{border-left-color:var(--warn)}table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{font-weight:650;color:var(--muted)}tr:last-child td{border-bottom:0}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}.muted{color:var(--muted)}.actions{margin-top:18px}.actions a{color:var(--accent);text-decoration:none}
+button,input{font:inherit}button{border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:6px;padding:6px 10px;cursor:pointer;min-height:32px}
+button:hover{border-color:var(--accent);color:var(--accent)}button.danger{border-color:#cf5757;color:#b33131}button.danger:hover{background:#fff1f1}
+button.primary{background:var(--accent);border-color:var(--accent);color:white}button.primary:hover{color:white;filter:brightness(.96)}button.small{font-size:12px;min-height:28px;padding:4px 8px}
+button:disabled{cursor:not-allowed;opacity:.55}.release-panel{display:flex;align-items:end;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;margin:18px 0}
+.release-panel label{display:flex;flex-direction:column;gap:4px;color:var(--muted);min-width:260px}.release-panel input{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:7px 9px;min-height:34px}
+.release-status{min-height:22px;color:var(--muted)}.release-status.ok{color:var(--accent)}.release-status.error{color:#b33131}.slot-line{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:8px}.slot-line:last-child{margin-bottom:0}.actions-cell{white-space:nowrap}
+@media (prefers-color-scheme:dark){button.danger{border-color:#d87474;color:#ff9a9a}button.danger:hover{background:#2c1d22}.release-status.error{color:#ff9a9a}}
+@media (max-width:720px){main{padding:22px 14px 36px}.release-panel{align-items:stretch}.release-panel label{min-width:100%}.actions-cell{white-space:normal}}
 </style></head><body><main>`)
 	b.WriteString(`<h1>认证文件并发限制器</h1>`)
 	b.WriteString(`<p class="sub">按 CPA 认证文件限制最大并发请求数，并支持手动释放槽位。</p>`)
@@ -185,6 +193,9 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 	writeMetric(&b, "槽位 TTL", strconv.FormatInt(cfg.SlotTTLSeconds, 10)+" 秒")
 	writeMetric(&b, "刷新间隔", strconv.FormatInt(cfg.AuthRefreshInterval, 10)+" 秒")
 	b.WriteString(`</section>`)
+	b.WriteString(`<section class="release-panel"><label>管理密钥<input type="password" data-management-key autocomplete="current-password" placeholder="CPA remote-management.secret-key"></label>`)
+	writeReleaseButton(&b, "all", "", "清空全部槽位", "danger")
+	b.WriteString(`<span class="release-status" data-release-status></span></section>`)
 
 	if cfg.DefaultLimit <= 0 && len(cfg.Limits) == 0 {
 		b.WriteString(`<div class="notice warn">当前 <code>default_limit</code> 为 0，且没有配置 <code>limits</code>。除非认证 JSON 内写了 <code>cpa_max_concurrency</code> 或 <code>max_concurrency</code>，否则不会限制并发。</div>`)
@@ -213,7 +224,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 	if len(status.Buckets) == 0 {
 		b.WriteString(`<p class="muted">当前没有占用中的槽位。</p>`)
 	} else {
-		b.WriteString(`<table><thead><tr><th>认证文件</th><th>数量</th><th>槽位</th></tr></thead><tbody>`)
+		b.WriteString(`<table><thead><tr><th>认证文件</th><th>数量</th><th>槽位</th><th>操作</th></tr></thead><tbody>`)
 		for _, bucket := range status.Buckets {
 			b.WriteString(`<tr><td><code>`)
 			b.WriteString(html.EscapeString(firstNonEmpty(bucket.DisplayKey, bucket.FileKey)))
@@ -222,8 +233,9 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 			b.WriteString(`</td><td>`)
 			for index, slot := range bucket.Slots {
 				if index > 0 {
-					b.WriteString(`<br>`)
+					b.WriteString(``)
 				}
+				b.WriteString(`<div class="slot-line"><span>`)
 				b.WriteString(`<code>`)
 				b.WriteString(html.EscapeString(slot.ID))
 				b.WriteString(`</code>`)
@@ -234,7 +246,12 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 				b.WriteString(` <span class="muted">剩余 `)
 				b.WriteString(strconv.FormatInt(slot.ExpiresInSeconds, 10))
 				b.WriteString(` 秒</span>`)
+				b.WriteString(`</span>`)
+				writeReleaseButton(&b, "slot_id", slot.ID, "释放", "small")
+				b.WriteString(`</div>`)
 			}
+			b.WriteString(`</td><td class="actions-cell">`)
+			writeReleaseButton(&b, "file_key", bucket.FileKey, "释放该认证文件", "danger")
 			b.WriteString(`</td></tr>`)
 		}
 		b.WriteString(`</tbody></table>`)
@@ -244,7 +261,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 	if len(status.Auths) == 0 {
 		b.WriteString(`<p class="muted">暂无缓存的认证文件。</p>`)
 	} else {
-		b.WriteString(`<table><thead><tr><th>名称</th><th>Provider</th><th>Auth Index</th><th>当前并发 / 最大并发</th><th>限额来源</th></tr></thead><tbody>`)
+		b.WriteString(`<table><thead><tr><th>名称</th><th>Provider</th><th>Auth Index</th><th>当前并发 / 最大并发</th><th>限额来源</th><th>操作</th></tr></thead><tbody>`)
 		for _, auth := range status.Auths {
 			limit := "不限制"
 			if auth.EffectiveLimit > 0 {
@@ -262,12 +279,92 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 			b.WriteString(html.EscapeString(limit))
 			b.WriteString(`</td><td>`)
 			b.WriteString(html.EscapeString(limitSourceLabel(auth.LimitSource)))
+			b.WriteString(`</td><td class="actions-cell">`)
+			selector, value := authReleaseSelector(auth)
+			if auth.CurrentSlots > 0 && value != "" {
+				writeReleaseButton(&b, selector, value, "释放当前槽位", "small")
+			} else {
+				b.WriteString(`<span class="muted">-</span>`)
+			}
 			b.WriteString(`</td></tr>`)
 		}
 		b.WriteString(`</tbody></table>`)
 	}
 
 	b.WriteString(`<div class="actions"><a href="?format=json">查看原始 JSON</a></div>`)
+	b.WriteString(`<script>
+(function(){
+  var keyInput = document.querySelector("[data-management-key]");
+  var statusEl = document.querySelector("[data-release-status]");
+  var saved = "";
+  try { saved = localStorage.getItem("acl_management_key") || ""; } catch (err) {}
+  if (keyInput && saved) { keyInput.value = saved; }
+  function setStatus(text, kind) {
+    if (!statusEl) { return; }
+    statusEl.textContent = text || "";
+    statusEl.className = "release-status" + (kind ? " " + kind : "");
+  }
+  function releasePayload(button) {
+    var selector = button.getAttribute("data-release-selector");
+    if (selector === "all") { return { all: true }; }
+    var value = button.getAttribute("data-release-value") || "";
+    if (!selector || !value) { throw new Error("缺少释放目标"); }
+    var payload = {};
+    payload[selector] = value;
+    return payload;
+  }
+  function responseError(data, fallback) {
+    if (data && data.error) {
+      if (typeof data.error === "string") { return data.error; }
+      if (data.error.message) { return data.error.message; }
+    }
+    if (data && data.message) { return data.message; }
+    return fallback;
+  }
+  async function releaseSlot(button) {
+    var key = keyInput ? keyInput.value.trim() : "";
+    if (!key) {
+      setStatus("请先填写 CPA 管理密钥。", "error");
+      if (keyInput) { keyInput.focus(); }
+      return;
+    }
+    var payload = releasePayload(button);
+    if (payload.all && !window.confirm("确定清空全部活跃槽位？")) { return; }
+    try { localStorage.setItem("acl_management_key", key); } catch (err) {}
+    var oldText = button.textContent;
+    button.disabled = true;
+    button.textContent = "释放中";
+    setStatus("正在释放槽位...", "");
+    try {
+      var res = await fetch("/v0/management/plugins/auth-concurrency-limiter/release", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "authorization": "Bearer " + key,
+          "x-management-key": key
+        },
+        body: JSON.stringify(payload)
+      });
+      var text = await res.text();
+      var data = {};
+      if (text) {
+        try { data = JSON.parse(text); } catch (err) { data = { error: text }; }
+      }
+      if (data && data.result && typeof data.result.released !== "undefined") { data = data.result; }
+      if (!res.ok) { throw new Error(responseError(data, "释放失败：HTTP " + res.status)); }
+      setStatus("已释放 " + (data.released || 0) + " 个槽位。", "ok");
+      window.setTimeout(function(){ window.location.reload(); }, 650);
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = oldText;
+      setStatus(err && err.message ? err.message : "释放失败", "error");
+    }
+  }
+  document.querySelectorAll("[data-release-selector]").forEach(function(button){
+    button.addEventListener("click", function(){ releaseSlot(button); });
+  });
+})();
+</script>`)
 	b.WriteString(`</main></body></html>`)
 	return b.String()
 }
@@ -286,6 +383,39 @@ func writeKVRow(b *strings.Builder, key string, value string) {
 	b.WriteString(`</code></th><td>`)
 	b.WriteString(html.EscapeString(value))
 	b.WriteString(`</td></tr>`)
+}
+
+func writeReleaseButton(b *strings.Builder, selector string, value string, label string, class string) {
+	b.WriteString(`<button type="button"`)
+	if class != "" {
+		b.WriteString(` class="`)
+		b.WriteString(html.EscapeString(class))
+		b.WriteString(`"`)
+	}
+	b.WriteString(` data-release-selector="`)
+	b.WriteString(html.EscapeString(selector))
+	b.WriteString(`"`)
+	if value != "" {
+		b.WriteString(` data-release-value="`)
+		b.WriteString(html.EscapeString(value))
+		b.WriteString(`"`)
+	}
+	b.WriteString(`>`)
+	b.WriteString(html.EscapeString(label))
+	b.WriteString(`</button>`)
+}
+
+func authReleaseSelector(auth authStatus) (string, string) {
+	if strings.TrimSpace(auth.FileKey) != "" {
+		return "file_key", auth.FileKey
+	}
+	if strings.TrimSpace(auth.ID) != "" {
+		return "auth_id", auth.ID
+	}
+	if strings.TrimSpace(auth.Index) != "" {
+		return "auth_index", auth.Index
+	}
+	return "", ""
 }
 
 func firstNonEmpty(values ...string) string {
