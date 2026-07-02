@@ -17,16 +17,28 @@ jobs:
       matrix:
         include:
           - goarch: amd64
-            platform: linux/amd64
+            packages: ""
+            cc: gcc
           - goarch: arm64
-            platform: linux/arm64
+            packages: gcc-aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enable QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential zip ${{ matrix.packages }}
 
       - name: Build plugin archive
         shell: bash
@@ -37,32 +49,21 @@ jobs:
           artifact="auth-concurrency-limiter_${version}_linux_${goarch}.zip"
 
           mkdir -p dist
-          docker run --rm \
-            --platform "${{ matrix.platform }}" \
-            -e VERSION="${version}" \
-            -e GOARCH="${goarch}" \
-            -v "$PWD:/src" \
-            -w /src \
-            golang:1.26-bookworm \
-            bash -lc '
-              set -euo pipefail
-              apt-get update
-              apt-get install -y --no-install-recommends build-essential git zip
-              rm -rf /var/lib/apt/lists/*
 
-              export CGO_ENABLED=1
-              export GOOS=linux
-              export GOARCH="${GOARCH}"
+          go test .
 
-              go test .
-              mkdir -p build
-              go build -trimpath -buildmode=c-shared -o build/auth-concurrency-limiter.so .
-              rm -f build/auth-concurrency-limiter.h
-              cd build
-              zip -9 "../dist/auth-concurrency-limiter_${VERSION}_linux_${GOARCH}.zip" auth-concurrency-limiter.so
-            '
+          export CGO_ENABLED=1
+          export GOOS=linux
+          export GOARCH="${goarch}"
+          export CC="${{ matrix.cc }}"
 
-          test -f "dist/${artifact}"
+          mkdir -p build
+          go build -trimpath -buildmode=c-shared -o build/auth-concurrency-limiter.so .
+          rm -f build/auth-concurrency-limiter.h
+          cd build
+          zip -9 "../dist/${artifact}" auth-concurrency-limiter.so
+
+          test -f "../dist/${artifact}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
