@@ -192,7 +192,7 @@ func pluginRegistration() registration {
 		SchemaVersion: pluginabi.SchemaVersion,
 		Metadata: pluginapi.Metadata{
 			Name:             "认证文件并发限制器",
-			Version:          "0.1.2",
+			Version:          "0.1.3",
 			Author:           "zhouxx2018",
 			GitHubRepository: "https://github.com/zhouxx2018/cpa-auth-concurrency-limiter",
 			Logo:             "https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/docs/logo.png",

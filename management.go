@@ -54,7 +54,9 @@ func handleManagement(raw []byte) ([]byte, error) {
 			Body:       []byte(`{"error":"未找到"}`),
 		})
 	}
-	status := globalLimiter.status(time.Now())
+	now := time.Now()
+	globalLimiter.maybeRefreshAuths(now)
+	status := globalLimiter.status(now)
 	if wantsJSONStatus(req) {
 		body, err := json.MarshalIndent(status, "", "  ")
 		if err != nil {
