@@ -117,7 +117,7 @@ type statusResponse struct {
 	Name                string         `json:"name"`
 	Config              statusConfig   `json:"config"`
 	Buckets             []bucketStatus `json:"buckets"`
-	Auths               []authRecord   `json:"auths"`
+	Auths               []authStatus   `json:"auths"`
 	LastAuthRefresh     string         `json:"last_auth_refresh,omitempty"`
 	LastAuthRefreshErr  string         `json:"last_auth_refresh_error,omitempty"`
 	HostAuthCacheSize   int            `json:"host_auth_cache_size"`
@@ -156,6 +156,21 @@ type bucketStatus struct {
 	DisplayKey string       `json:"display_key,omitempty"`
 	Count      int          `json:"count"`
 	Slots      []slotStatus `json:"slots,omitempty"`
+}
+
+type authStatus struct {
+	ID             string `json:"id,omitempty"`
+	Index          string `json:"auth_index,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Path           string `json:"path,omitempty"`
+	Provider       string `json:"provider,omitempty"`
+	FileKey        string `json:"file_key,omitempty"`
+	DisplayKey     string `json:"display_key,omitempty"`
+	CurrentSlots   int    `json:"current_slots"`
+	EffectiveLimit int    `json:"effective_limit"`
+	LimitSource    string `json:"limit_source,omitempty"`
+	Limit          int    `json:"limit,omitempty"`
+	HasLimit       bool   `json:"has_limit,omitempty"`
 }
 
 type slotStatus struct {
@@ -588,6 +603,37 @@ func candidateLimitKeys(candidate pluginapi.SchedulerAuthCandidate, rec authReco
 	return uniqueStrings(keys)
 }
 
+func authRecordFileKey(rec authRecord) (string, string) {
+	values := []string{
+		rec.Path,
+		rec.Name,
+		rec.ID,
+		rec.Index,
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		return normalizeLookupKey(value), value
+	}
+	return "", ""
+}
+
+func authRecordLimitKeys(rec authRecord, fileKey, displayKey string) []string {
+	keys := make([]string, 0, 10)
+	add := func(value string) {
+		keys = append(keys, lookupVariants(value)...)
+	}
+	add(rec.ID)
+	add(rec.Index)
+	add(rec.Name)
+	add(rec.Path)
+	add(displayKey)
+	add(fileKey)
+	return uniqueStrings(keys)
+}
+
 func (l *limiter) lookupConfiguredLimitLocked(keys []string) (int, string, bool) {
 	for _, key := range keys {
 		if limit, ok := l.cfg.Limits[key]; ok {
@@ -595,6 +641,20 @@ func (l *limiter) lookupConfiguredLimitLocked(keys []string) (int, string, bool)
 		}
 	}
 	return 0, "", false
+}
+
+func (l *limiter) effectiveLimitForAuthLocked(rec authRecord, fileKey, displayKey string) (int, string, bool) {
+	limit, source, hasLimit := l.lookupConfiguredLimitLocked(authRecordLimitKeys(rec, fileKey, displayKey))
+	if hasLimit {
+		return limit, source, true
+	}
+	if rec.HasLimit {
+		return rec.Limit, "auth_json", true
+	}
+	if l.cfg.DefaultLimit > 0 {
+		return l.cfg.DefaultLimit, "default", true
+	}
+	return 0, "unlimited", false
 }
 
 func (l *limiter) chooseCandidateLocked(req pluginapi.SchedulerPickRequest, decorated []decoratedCandidate, available []bool) int {
@@ -857,9 +917,28 @@ func (l *limiter) status(now time.Time) statusResponse {
 		return buckets[i].FileKey < buckets[j].FileKey
 	})
 
-	auths := make([]authRecord, 0, len(l.auths))
+	auths := make([]authStatus, 0, len(l.auths))
 	for _, rec := range l.auths {
-		auths = append(auths, rec)
+		fileKey, displayKey := authRecordFileKey(rec)
+		current := 0
+		if fileKey != "" {
+			current = len(l.slots[fileKey])
+		}
+		effectiveLimit, limitSource, _ := l.effectiveLimitForAuthLocked(rec, fileKey, displayKey)
+		auths = append(auths, authStatus{
+			ID:             rec.ID,
+			Index:          rec.Index,
+			Name:           rec.Name,
+			Path:           rec.Path,
+			Provider:       rec.Provider,
+			FileKey:        fileKey,
+			DisplayKey:     displayKey,
+			CurrentSlots:   current,
+			EffectiveLimit: effectiveLimit,
+			LimitSource:    limitSource,
+			Limit:          rec.Limit,
+			HasLimit:       rec.HasLimit,
+		})
 	}
 	sort.Slice(auths, func(i, j int) bool {
 		if auths[i].Name != auths[j].Name {
