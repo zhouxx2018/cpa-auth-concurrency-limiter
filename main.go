@@ -154,12 +154,12 @@ func handleMethod(method string, request []byte) ([]byte, error) {
 			Routes: []managementRoute{{
 				Method:      http.MethodPost,
 				Path:        "/plugins/" + pluginName + "/release",
-				Description: "Manually releases auth concurrency limiter slots.",
+				Description: "手动释放认证文件并发槽位。",
 			}},
 			Resources: []managementResource{{
 				Path:        "/status",
-				Menu:        "Auth Concurrency",
-				Description: "Shows active per-auth-file concurrency slots and limiter configuration.",
+				Menu:        "认证并发",
+				Description: "查看每个认证文件的并发槽位、当前配置和缓存状态。",
 			}},
 		})
 	case pluginabi.MethodManagementHandle:
@@ -191,47 +191,47 @@ func pluginRegistration() registration {
 	return registration{
 		SchemaVersion: pluginabi.SchemaVersion,
 		Metadata: pluginapi.Metadata{
-			Name:             pluginName,
-			Version:          "0.1.0",
-			Author:           "router-for-me",
-			GitHubRepository: "https://github.com/router-for-me/CLIProxyAPI",
+			Name:             "认证文件并发限制器",
+			Version:          "0.1.1",
+			Author:           "zhouxx2018",
+			GitHubRepository: "https://github.com/zhouxx2018/cpa-auth-concurrency-limiter",
 			Logo:             "https://raw.githubusercontent.com/router-for-me/CLIProxyAPI/main/docs/logo.png",
 			ConfigFields: []pluginapi.ConfigField{
 				{
 					Name:        "default_limit",
 					Type:        pluginapi.ConfigFieldTypeInteger,
-					Description: "Default max concurrency for candidates that do not match limits or auth JSON. Use 0 for unlimited.",
+					Description: "默认最大并发数。没有命中 limits 或认证文件内限额时使用；0 表示不限制。",
 				},
 				{
 					Name:        "limits",
 					Type:        pluginapi.ConfigFieldTypeObject,
-					Description: "Per-auth limits keyed by auth file name, path, auth ID, or auth index.",
+					Description: "按认证文件名、路径、auth ID 或 auth index 设置单独并发上限。",
 				},
 				{
 					Name:        "slot_ttl",
 					Type:        pluginapi.ConfigFieldTypeString,
-					Description: "Stale slot timeout, for example 15m. Pure plugin mode uses this as a fallback release.",
+					Description: "槽位兜底过期时间，例如 15m。请求未正常上报用量时会按此时间释放。",
 				},
 				{
 					Name:        "strategy",
 					Type:        pluginapi.ConfigFieldTypeEnum,
 					EnumValues:  []string{strategyRoundRobin, strategyFillFirst},
-					Description: "Candidate selection strategy among auths with available capacity.",
+					Description: "多个认证文件都有空闲容量时的选择策略：round-robin 轮询，fill-first 优先填满。",
 				},
 				{
 					Name:        "auth_refresh_interval",
 					Type:        pluginapi.ConfigFieldTypeString,
-					Description: "How often to refresh host auth metadata for file names, auth indexes, and auth JSON limits.",
+					Description: "刷新 CPA 认证文件信息的间隔，用于获取文件名、auth index 和认证文件内限额。",
 				},
 				{
 					Name:        "read_auth_limits",
 					Type:        pluginapi.ConfigFieldTypeBoolean,
-					Description: "Reads cpa_max_concurrency or max_concurrency from auth JSON when host callbacks are available.",
+					Description: "启用后读取认证 JSON 内的 cpa_max_concurrency 或 max_concurrency 字段。",
 				},
 				{
 					Name:        "deny_status",
 					Type:        pluginapi.ConfigFieldTypeInteger,
-					Description: "HTTP status used when every candidate is at capacity. Defaults to 429.",
+					Description: "所有候选认证都达到并发上限时返回的 HTTP 状态码，默认 429。",
 				},
 			},
 		},

@@ -3,12 +3,12 @@
   "plugins": [
     {
       "id": "auth-concurrency-limiter",
-      "name": "Auth Concurrency Limiter",
-      "description": "Limit concurrent requests per auth file and expose manual slot release endpoints.",
+      "name": "认证文件并发限制器",
+      "description": "限制每个 CPA 认证文件的最大并发请求数，并提供手动释放槽位接口。",
       "author": "zhouxx2018",
       "repository": "https://github.com/zhouxx2018/cpa-auth-concurrency-limiter",
       "homepage": "https://github.com/zhouxx2018/cpa-auth-concurrency-limiter",
-      "tags": ["scheduler", "concurrency", "auth"]
+      "tags": ["调度", "并发限制", "认证文件"]
     }
   ]
 }

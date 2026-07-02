@@ -464,7 +464,7 @@ func (l *limiter) pick(req pluginapi.SchedulerPickRequest, now time.Time) (plugi
 	if availableCount == 0 {
 		return pluginapi.SchedulerPickResponse{}, &schedulerReject{
 			Code:       "auth_concurrency_exhausted",
-			Message:    "all auth candidates are at their configured concurrency limit",
+			Message:    "所有候选认证文件都已达到并发上限",
 			HTTPStatus: l.cfg.DenyStatus,
 			Retryable:  true,
 		}
@@ -901,8 +901,8 @@ func (l *limiter) status(now time.Time) statusResponse {
 		ActiveSlotCount:     activeSlots,
 		ConfiguredLimitKeys: configuredKeys,
 		ImplementationNotes: []string{
-			"Pure plugin mode releases slots from usage.handle and uses slot_ttl as a stale-slot fallback.",
-			"If a request runs longer than slot_ttl, the slot can expire before the request completes.",
+			"纯插件模式会在 usage.handle 收到用量记录时释放槽位，并使用 slot_ttl 作为兜底过期时间。",
+			"如果单次请求运行时间超过 slot_ttl，槽位可能会在请求真正完成前过期。",
 		},
 	}
 }

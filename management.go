@@ -50,7 +50,7 @@ func handleManagement(raw []byte) ([]byte, error) {
 		return okEnvelope(pluginapi.ManagementResponse{
 			StatusCode: http.StatusNotFound,
 			Headers:    http.Header{"content-type": []string{"application/json; charset=utf-8"}},
-			Body:       []byte(`{"error":"not found"}`),
+			Body:       []byte(`{"error":"未找到"}`),
 		})
 	}
 	body, err := json.MarshalIndent(globalLimiter.status(time.Now()), "", "  ")
@@ -67,7 +67,7 @@ func handleManagement(raw []byte) ([]byte, error) {
 func handleRelease(req managementRequest) ([]byte, error) {
 	if !strings.EqualFold(req.Method, http.MethodPost) {
 		return okEnvelope(jsonManagementResponse(http.StatusMethodNotAllowed, map[string]any{
-			"error": "method not allowed",
+			"error": "请求方法不允许",
 		}))
 	}
 	releaseReq, err := releaseRequestFromManagement(req)
@@ -78,7 +78,7 @@ func handleRelease(req managementRequest) ([]byte, error) {
 	}
 	if !releaseReq.All && strings.TrimSpace(releaseReq.SlotID) == "" && strings.TrimSpace(releaseReq.AuthID) == "" && strings.TrimSpace(releaseReq.AuthIndex) == "" && strings.TrimSpace(releaseReq.FileKey) == "" {
 		return okEnvelope(jsonManagementResponse(http.StatusBadRequest, map[string]any{
-			"error": "one of all, slot_id, auth_id, auth_index, or file_key is required",
+			"error": "必须提供 all、slot_id、auth_id、auth_index 或 file_key 之一",
 		}))
 	}
 	resp := globalLimiter.releaseManual(releaseReq, time.Now())
@@ -98,7 +98,7 @@ func releaseRequestFromManagement(req managementRequest) (releaseRequest, error)
 	if raw := strings.TrimSpace(req.Query.Get("all")); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
 		if err != nil {
-			return releaseRequest{}, fmt.Errorf("all must be a boolean")
+			return releaseRequest{}, fmt.Errorf("all 必须是布尔值")
 		}
 		out.All = parsed
 	}
