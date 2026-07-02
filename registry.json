@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "auth-concurrency-limiter",
+      "name": "Auth Concurrency Limiter",
+      "description": "Limit concurrent requests per auth file and expose manual slot release endpoints.",
+      "author": "zhouxx2018",
+      "repository": "https://github.com/zhouxx2018/cpa-auth-concurrency-limiter",
+      "homepage": "https://github.com/zhouxx2018/cpa-auth-concurrency-limiter",
+      "tags": ["scheduler", "concurrency", "auth"]
+    }
+  ]
+}

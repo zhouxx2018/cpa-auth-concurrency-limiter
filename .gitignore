@@ -1,0 +1,6 @@
+dist/
+build/
+*.so
+*.h
+*.zip
+checksums.txt

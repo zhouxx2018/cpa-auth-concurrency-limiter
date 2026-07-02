@@ -1,0 +1,97 @@
+name: Release CPA Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build linux/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: amd64
+            platform: linux/amd64
+          - goarch: arm64
+            platform: linux/arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Build plugin archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          goarch="${{ matrix.goarch }}"
+          artifact="auth-concurrency-limiter_${version}_linux_${goarch}.zip"
+
+          mkdir -p dist
+          docker run --rm \
+            --platform "${{ matrix.platform }}" \
+            -e VERSION="${version}" \
+            -e GOARCH="${goarch}" \
+            -v "$PWD:/src" \
+            -w /src \
+            golang:1.26-bookworm \
+            bash -lc '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends build-essential git zip
+              rm -rf /var/lib/apt/lists/*
+
+              export CGO_ENABLED=1
+              export GOOS=linux
+              export GOARCH="${GOARCH}"
+
+              go test .
+              mkdir -p build
+              go build -trimpath -buildmode=c-shared -o build/auth-concurrency-limiter.so .
+              rm -f build/auth-concurrency-limiter.h
+              cd build
+              zip -9 "../dist/auth-concurrency-limiter_${VERSION}_linux_${GOARCH}.zip" auth-concurrency-limiter.so
+            '
+
+          test -f "dist/${artifact}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-linux-${{ matrix.goarch }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download plugin archives
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum *.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*

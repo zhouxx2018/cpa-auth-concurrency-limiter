@@ -1,0 +1,13 @@
+plugins:
+  enabled: true
+  dir: "/CLIProxyAPI/plugins"
+  store-sources:
+    - "https://raw.githubusercontent.com/zhouxx2018/cpa-auth-concurrency-limiter/main/registry.json"
+  configs:
+    auth-concurrency-limiter:
+      enabled: true
+      priority: 1
+      default_limit: 1
+      slot_ttl: 15m
+      strategy: round-robin
+      read_auth_limits: true
