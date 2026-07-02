@@ -11,17 +11,19 @@ permissions:
 jobs:
   build:
     name: Build linux/${{ matrix.goarch }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - goarch: amd64
+            runner: ubuntu-latest
             packages: ""
             cc: gcc
           - goarch: arm64
-            packages: gcc-aarch64-linux-gnu
-            cc: aarch64-linux-gnu-gcc
+            runner: ubuntu-24.04-arm
+            packages: ""
+            cc: gcc
 
     steps:
       - name: Checkout
